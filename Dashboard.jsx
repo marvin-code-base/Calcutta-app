@@ -32,12 +32,21 @@ export default function Dashboard({ league, teams, entries }) {
     playoffPoolPct: league.playoff_pool_pct,
     regularSeasonPoolPct: league.regular_season_pool_pct,
   };
-  const jackpot = Number(league.jackpot) || 0;
+  // The pot is whatever's actually been bid so far, not a manually-set number —
+  // this keeps ROI accurate in real time as the auction progresses.
+  const jackpot = entries.reduce(
+    (sum, entry) => sum + entry.bids.reduce((s, b) => s + Number(b.bid_amount), 0),
+    0
+  );
 
   const teamName = (code) => NFL_TEAMS.find((t) => t.code === code)?.name ?? code;
 
   return (
     <div>
+      <div className="card">
+        <h2 style={{ margin: 0 }}>Total pot: ${jackpot.toFixed(2)}</h2>
+      </div>
+
       {!hasGameCount && (
         <div className="card">
           <p className="subtitle" style={{ margin: 0 }}>

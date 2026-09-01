@@ -71,7 +71,7 @@ export default function App() {
           </nav>
 
           {tab === "Settings" && (
-            <Settings league={league} onLeagueChange={handleLeagueChange} />
+            <Settings league={league} entries={entries} onLeagueChange={handleLeagueChange} />
           )}
           {tab === "Teams" && league && (
             <Teams league={league} teams={teams} onTeamsChange={setTeams} />

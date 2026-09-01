@@ -8,7 +8,7 @@ import { ROUND_TIERS, validateConfig } from "./scoring.js";
 import { validateIncrementRules } from "./auctionRules.js";
 import { ROUND_LABELS } from "./nflTeams.js";
 
-export default function Settings({ league, onLeagueChange }) {
+export default function Settings({ league, entries, onLeagueChange }) {
   const [name, setName] = useState("");
   const [seasonYear, setSeasonYear] = useState(new Date().getFullYear());
   const [error, setError] = useState("");
@@ -79,9 +79,6 @@ export default function Settings({ league, onLeagueChange }) {
       if (updates.roundWeights !== undefined) {
         dbUpdates.round_weights = updates.roundWeights;
       }
-      if (updates.jackpot !== undefined) {
-        dbUpdates.jackpot = updates.jackpot;
-      }
       if (updates.totalDecidedGames !== undefined) {
         dbUpdates.total_decided_games = updates.totalDecidedGames;
       }
@@ -140,18 +137,16 @@ export default function Settings({ league, onLeagueChange }) {
           }}
         />
 
-        <label htmlFor="jackpot">Total pot ($)</label>
-        <input
-          id="jackpot"
-          type="number"
-          step="0.01"
-          min="0"
-          defaultValue={league.jackpot}
-          onBlur={(e) => {
-            const v = Number(e.target.value);
-            if (v !== league.jackpot) handleFieldSave({ jackpot: v });
-          }}
-        />
+        <label htmlFor="jackpot">Total pot</label>
+        <p id="jackpot" style={{ margin: "0 0 0.9rem", fontFamily: "var(--font-num)" }}>
+          ${(entries ?? []).reduce(
+            (sum, entry) => sum + entry.bids.reduce((s, b) => s + Number(b.bid_amount), 0),
+            0
+          ).toFixed(2)}
+          <span className="subtitle" style={{ display: "inline", marginLeft: "0.5rem" }}>
+            (adds up automatically from recorded bids)
+          </span>
+        </p>
 
         <label htmlFor="total-games">Total regular-season games decided league-wide (games minus ties)</label>
         <input
