@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   getTeams,
   startAuction,
@@ -7,7 +7,7 @@ import {
   cancelAuction,
   subscribeToLeagueTeams,
 } from "./db.js";
-import { minimumNextBid, isValidBid } from "./auctionRules.js";
+import { minimumNextBid, isValidBid, secondsRemaining, computeDeadline } from "./auctionRules.js";
 import { NFL_TEAMS } from "./nflTeams.js";
 
 const IDENTITY_KEY = "calcutta_my_entry_id";
@@ -18,7 +18,6 @@ export default function Auction({ league, teams, entries, onTeamsChange }) {
   );
   const [bidValue, setBidValue] = useState("");
   const [message, setMessage] = useState("");
-  const [pendingTeamToStart, setPendingTeamToStart] = useState("");
 
   useEffect(() => {
     const unsubscribe = subscribeToLeagueTeams(league.id, async () => {
@@ -28,6 +27,35 @@ export default function Auction({ league, teams, entries, onTeamsChange }) {
     return unsubscribe;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [league.id]);
+
+  const [nowTick, setNowTick] = useState(() => new Date());
+  const attemptedSellRef = useRef(null);
+
+  useEffect(() => {
+    const interval = setInterval(() => setNowTick(new Date()), 1000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const activeTeamForTimer = teams.find((t) => t.auction_status === "active");
+  const remaining = activeTeamForTimer
+    ? secondsRemaining(activeTeamForTimer.bid_deadline, nowTick)
+    : null;
+
+  useEffect(() => {
+    if (!activeTeamForTimer) return;
+    if (remaining !== 0) return;
+    if (!activeTeamForTimer.current_bidder_entry_id) return; // no bids yet — timer hasn't started
+    const key = `${activeTeamForTimer.id}-${activeTeamForTimer.bid_deadline}`;
+    if (attemptedSellRef.current === key) return;
+    attemptedSellRef.current = key;
+    sellCurrentTeam(
+      activeTeamForTimer.id,
+      activeTeamForTimer.current_bidder_entry_id,
+      activeTeamForTimer.current_bid
+    ).catch(() => {
+      // Another connected phone already sold it — safe to ignore.
+    });
+  }, [activeTeamForTimer, remaining]);
 
   function handleChooseIdentity(entryId) {
     localStorage.setItem(IDENTITY_KEY, entryId);
@@ -81,7 +109,11 @@ export default function Auction({ league, teams, entries, onTeamsChange }) {
       return;
     }
     try {
-      const result = await placeBid(activeTeam.id, myEntryId, amount, activeTeam.current_bid);
+      const newDeadline =
+        Number(league.bid_timeout_seconds) > 0
+          ? computeDeadline(Number(league.bid_timeout_seconds))
+          : null;
+      const result = await placeBid(activeTeam.id, myEntryId, amount, activeTeam.current_bid, newDeadline);
       if (!result) {
         setMessage("Someone else's bid landed first — check the new high bid and try again.");
       } else {
@@ -92,10 +124,10 @@ export default function Auction({ league, teams, entries, onTeamsChange }) {
     }
   }
 
-  async function handleStart() {
-    if (!pendingTeamToStart) return;
-    await startAuction(pendingTeamToStart);
-    setPendingTeamToStart("");
+  async function handleDraw() {
+    if (pendingTeams.length === 0) return;
+    const randomTeam = pendingTeams[Math.floor(Math.random() * pendingTeams.length)];
+    await startAuction(randomTeam.id);
   }
 
   async function handleSell() {
@@ -129,6 +161,11 @@ export default function Auction({ league, teams, entries, onTeamsChange }) {
                 ? `High bid: $${activeTeam.current_bid} (${entryName(activeTeam.current_bidder_entry_id)})`
                 : "No bids yet"}
             </p>
+            {activeTeam.current_bidder_entry_id && remaining !== null && (
+              <p style={{ color: remaining <= 5 ? "var(--brick)" : "var(--gold)", fontWeight: 600 }}>
+                {remaining > 0 ? `Selling in ${remaining}s unless outbid` : "Selling…"}
+              </p>
+            )}
             <form onSubmit={handlePlaceBid}>
               <input
                 type="number"
@@ -151,21 +188,9 @@ export default function Auction({ league, teams, entries, onTeamsChange }) {
             <div className="empty-state">All teams have been auctioned.</div>
           ) : (
             <>
-              <label htmlFor="start-team">Team to put up for bid</label>
-              <select
-                id="start-team"
-                value={pendingTeamToStart}
-                onChange={(e) => setPendingTeamToStart(e.target.value)}
-              >
-                <option value="">Choose a team…</option>
-                {pendingTeams.map((t) => (
-                  <option key={t.id} value={t.id}>
-                    {teamName(t.nfl_team_code)}
-                  </option>
-                ))}
-              </select>
-              <button className="primary" onClick={handleStart} disabled={!pendingTeamToStart}>
-                Start auction
+              <p className="subtitle">{pendingTeams.length} team{pendingTeams.length === 1 ? "" : "s"} left in the hat</p>
+              <button className="primary" onClick={handleDraw}>
+                Draw next team
               </button>
             </>
           )

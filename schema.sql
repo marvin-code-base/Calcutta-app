@@ -18,6 +18,7 @@ create table if not exists leagues (
   increment_rules jsonb not null default '[
     {"threshold": 0, "increment": 1}
   ]',
+  bid_timeout_seconds int not null default 30, -- 0 disables the countdown/auto-sell
   created_at timestamptz not null default now()
 );
 
@@ -39,6 +40,7 @@ create table if not exists teams (
     check (auction_status in ('pending','active','sold')),
   current_bid numeric,
   current_bidder_entry_id uuid references entries(id),
+  bid_deadline timestamptz,
   updated_at timestamptz not null default now()
 );
 

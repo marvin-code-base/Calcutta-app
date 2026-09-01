@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { incrementAt, minimumNextBid, isValidBid } from "./auctionRules.js";
+import { incrementAt, minimumNextBid, isValidBid, secondsRemaining, computeDeadline } from "./auctionRules.js";
 
 const rules = [
   { threshold: 0, increment: 1 },
@@ -37,5 +37,28 @@ describe("isValidBid", () => {
   it("accepts a bid at or above the minimum", () => {
     expect(isValidBid(19, 18, 10, rules)).toBe(true);
     expect(isValidBid(25, 18, 10, rules)).toBe(true);
+  });
+});
+
+describe("secondsRemaining", () => {
+  it("returns null when there's no deadline", () => {
+    expect(secondsRemaining(null, new Date())).toBe(null);
+  });
+  it("counts down toward zero", () => {
+    const now = new Date("2026-01-01T00:00:00Z");
+    const deadline = new Date("2026-01-01T00:00:20Z").toISOString();
+    expect(secondsRemaining(deadline, now)).toBe(20);
+  });
+  it("floors at zero once the deadline has passed", () => {
+    const now = new Date("2026-01-01T00:01:00Z");
+    const deadline = new Date("2026-01-01T00:00:20Z").toISOString();
+    expect(secondsRemaining(deadline, now)).toBe(0);
+  });
+});
+
+describe("computeDeadline", () => {
+  it("adds the timeout in seconds to the given time", () => {
+    const from = new Date("2026-01-01T00:00:00Z");
+    expect(computeDeadline(30, from)).toBe("2026-01-01T00:00:30.000Z");
   });
 });

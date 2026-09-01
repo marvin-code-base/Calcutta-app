@@ -88,6 +88,9 @@ export default function Settings({ league, onLeagueChange }) {
       if (updates.startingBid !== undefined) {
         dbUpdates.starting_bid = updates.startingBid;
       }
+      if (updates.bidTimeoutSeconds !== undefined) {
+        dbUpdates.bid_timeout_seconds = updates.bidTimeoutSeconds;
+      }
       if (updates.incrementRules !== undefined) {
         dbUpdates.increment_rules = updates.incrementRules;
       }
@@ -173,6 +176,20 @@ export default function Settings({ league, onLeagueChange }) {
           onBlur={(e) => {
             const v = Number(e.target.value);
             if (v !== league.starting_bid) handleFieldSave({ startingBid: v });
+          }}
+        />
+
+        <label htmlFor="bid-timeout">Time between bids before it sells (seconds, 0 = off)</label>
+        <input
+          id="bid-timeout"
+          type="number"
+          step="1"
+          min="0"
+          disabled={locked}
+          defaultValue={league.bid_timeout_seconds}
+          onBlur={(e) => {
+            const v = Number(e.target.value);
+            if (v !== league.bid_timeout_seconds) handleFieldSave({ bidTimeoutSeconds: v });
           }}
         />
 

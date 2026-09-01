@@ -48,6 +48,22 @@ export function minimumNextBid(currentBid, startingBid, incrementRules) {
 }
 
 /**
+ * Seconds remaining until a bid deadline, floored at 0. Both args are
+ * ISO timestamp strings (or Date objects) so this stays easy to test
+ * without relying on the real clock.
+ */
+export function secondsRemaining(deadline, now) {
+  if (!deadline) return null;
+  const deadlineMs = new Date(deadline).getTime();
+  const nowMs = new Date(now).getTime();
+  return Math.max(0, Math.ceil((deadlineMs - nowMs) / 1000));
+}
+
+export function computeDeadline(timeoutSeconds, from = new Date()) {
+  return new Date(from.getTime() + timeoutSeconds * 1000).toISOString();
+}
+
+/**
  * Whether a proposed bid is legal given the current state.
  */
 export function isValidBid(proposedAmount, currentBid, startingBid, incrementRules) {

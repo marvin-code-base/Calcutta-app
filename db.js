@@ -39,10 +39,15 @@ export async function addTeam(leagueId, nflTeamCode) {
   return data;
 }
 
-export async function startAuction(teamId) {
+export async function startAuction(teamId, deadline) {
   const { data, error } = await supabase
     .from("teams")
-    .update({ auction_status: "active", current_bid: null, current_bidder_entry_id: null })
+    .update({
+      auction_status: "active",
+      current_bid: null,
+      current_bidder_entry_id: null,
+      bid_deadline: deadline ?? null,
+    })
     .eq("id", teamId)
     .select()
     .single();
@@ -56,12 +61,17 @@ export async function startAuction(teamId) {
  * only succeeds if the row still matches that, which prevents two people's
  * simultaneous bids from silently overwriting each other. If someone else's
  * bid landed first, this returns null so the UI can refetch and show the
- * new high bid instead of a false success.
+ * new high bid instead of a false success. newDeadline (if the league uses
+ * a bid timer) extends the countdown on a successful bid.
  */
-export async function placeBid(teamId, entryId, amount, expectedCurrentBid) {
+export async function placeBid(teamId, entryId, amount, expectedCurrentBid, newDeadline) {
   let query = supabase
     .from("teams")
-    .update({ current_bid: amount, current_bidder_entry_id: entryId })
+    .update({
+      current_bid: amount,
+      current_bidder_entry_id: entryId,
+      bid_deadline: newDeadline ?? null,
+    })
     .eq("id", teamId)
     .eq("auction_status", "active");
 
