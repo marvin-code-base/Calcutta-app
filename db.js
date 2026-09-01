@@ -8,6 +8,37 @@
  */
 import { supabase } from "./supabaseClient.js";
 
+export async function getFirstLeague() {
+  const { data, error } = await supabase
+    .from("leagues")
+    .select("*")
+    .order("created_at", { ascending: true })
+    .limit(1)
+    .maybeSingle();
+  if (error) throw error;
+  return data;
+}
+
+export async function createLeague({ name, seasonYear }) {
+  const { data, error } = await supabase
+    .from("leagues")
+    .insert({ name, season_year: seasonYear })
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+export async function addTeam(leagueId, nflTeamCode) {
+  const { data, error } = await supabase
+    .from("teams")
+    .insert({ league_id: leagueId, nfl_team_code: nflTeamCode })
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+}
+
 export async function getLeague(leagueId) {
   const { data, error } = await supabase
     .from("leagues")
