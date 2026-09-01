@@ -3,10 +3,11 @@ import { getFirstLeague, getTeams, getEntries } from "./db.js";
 import Settings from "./Settings.jsx";
 import Teams from "./Teams.jsx";
 import Entries from "./Entries.jsx";
+import Auction from "./Auction.jsx";
 import Dashboard from "./Dashboard.jsx";
 import "./styles.css";
 
-const TABS = ["Settings", "Teams", "Bidders", "Dashboard"];
+const TABS = ["Settings", "Teams", "Bidders", "Auction", "Dashboard"];
 
 export default function App() {
   const [league, setLeague] = useState(null);
@@ -81,6 +82,14 @@ export default function App() {
               teams={teams}
               entries={entries}
               onEntriesChange={setEntries}
+            />
+          )}
+          {tab === "Auction" && league && (
+            <Auction
+              league={league}
+              teams={teams}
+              entries={entries}
+              onTeamsChange={setTeams}
             />
           )}
           {tab === "Dashboard" && league && (

@@ -5,6 +5,7 @@ import {
   lockLeague,
 } from "./db.js";
 import { ROUND_TIERS, validateConfig } from "./scoring.js";
+import { validateIncrementRules } from "./auctionRules.js";
 import { ROUND_LABELS } from "./nflTeams.js";
 
 export default function Settings({ league, onLeagueChange }) {
@@ -84,6 +85,12 @@ export default function Settings({ league, onLeagueChange }) {
       if (updates.totalDecidedGames !== undefined) {
         dbUpdates.total_decided_games = updates.totalDecidedGames;
       }
+      if (updates.startingBid !== undefined) {
+        dbUpdates.starting_bid = updates.startingBid;
+      }
+      if (updates.incrementRules !== undefined) {
+        dbUpdates.increment_rules = updates.incrementRules;
+      }
       const updated = await updateLeagueConfig(league.id, dbUpdates);
       onLeagueChange(updated);
     } catch (err) {
@@ -155,12 +162,124 @@ export default function Settings({ league, onLeagueChange }) {
           }}
         />
 
+        <label htmlFor="starting-bid">Starting bid ($)</label>
+        <input
+          id="starting-bid"
+          type="number"
+          step="1"
+          min="0"
+          disabled={locked}
+          defaultValue={league.starting_bid}
+          onBlur={(e) => {
+            const v = Number(e.target.value);
+            if (v !== league.starting_bid) handleFieldSave({ startingBid: v });
+          }}
+        />
+
         {!locked && (
           <button className="secondary" onClick={handleLock} disabled={saving}>
             Lock scoring rules (do this once bidding opens)
           </button>
         )}
         {error && <p className="negative">{error}</p>}
+      </div>
+
+      <div className="card">
+        <h2>Bid increments</h2>
+        <p className="subtitle">
+          Below each threshold, bids go up by that increment. The first row
+          must start at $0.
+        </p>
+        <table>
+          <thead>
+            <tr>
+              <th>At bid amount ($)</th>
+              <th className="num">Increment ($)</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {league.increment_rules.map((rule, i) => (
+              <tr key={i}>
+                <td>
+                  <input
+                    style={{ marginBottom: 0 }}
+                    type="number"
+                    min="0"
+                    disabled={locked || i === 0}
+                    defaultValue={rule.threshold}
+                    onBlur={(e) => {
+                      const v = Number(e.target.value);
+                      if (v !== rule.threshold) {
+                        const updated = league.increment_rules.map((r, idx) =>
+                          idx === i ? { ...r, threshold: v } : r
+                        );
+                        try {
+                          validateIncrementRules(updated);
+                          handleFieldSave({ incrementRules: updated });
+                        } catch (err) {
+                          setError(err.message);
+                        }
+                      }
+                    }}
+                  />
+                </td>
+                <td className="num">
+                  <input
+                    style={{ marginBottom: 0, textAlign: "right" }}
+                    type="number"
+                    min="1"
+                    disabled={locked}
+                    defaultValue={rule.increment}
+                    onBlur={(e) => {
+                      const v = Number(e.target.value);
+                      if (v !== rule.increment) {
+                        const updated = league.increment_rules.map((r, idx) =>
+                          idx === i ? { ...r, increment: v } : r
+                        );
+                        try {
+                          validateIncrementRules(updated);
+                          handleFieldSave({ incrementRules: updated });
+                        } catch (err) {
+                          setError(err.message);
+                        }
+                      }
+                    }}
+                  />
+                </td>
+                <td>
+                  {!locked && i !== 0 && (
+                    <button
+                      className="secondary"
+                      onClick={() => {
+                        const updated = league.increment_rules.filter((_, idx) => idx !== i);
+                        handleFieldSave({ incrementRules: updated });
+                      }}
+                    >
+                      Remove
+                    </button>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        {!locked && (
+          <button
+            className="secondary"
+            onClick={() => {
+              const lastThreshold =
+                league.increment_rules[league.increment_rules.length - 1]?.threshold ?? 0;
+              const updated = [
+                ...league.increment_rules,
+                { threshold: lastThreshold + 10, increment: 1 },
+              ];
+              handleFieldSave({ incrementRules: updated });
+            }}
+          >
+            Add threshold
+          </button>
+        )}
       </div>
 
       <div className="card">

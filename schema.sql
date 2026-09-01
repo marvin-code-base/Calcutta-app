@@ -14,7 +14,17 @@ create table if not exists leagues (
   total_decided_games int, -- set once schedule/tie count is known
   jackpot numeric not null default 0,
   locked boolean not null default false, -- true once bidding opens
+  starting_bid numeric not null default 1,
+  increment_rules jsonb not null default '[
+    {"threshold": 0, "increment": 1}
+  ]',
   created_at timestamptz not null default now()
+);
+
+create table if not exists entries (
+  id uuid primary key default gen_random_uuid(),
+  league_id uuid not null references leagues(id) on delete cascade,
+  owner_name text not null
 );
 
 create table if not exists teams (
@@ -25,13 +35,11 @@ create table if not exists teams (
   furthest_round text not null default 'none'
     check (furthest_round in
       ('none','wild_card','divisional','conference','super_bowl','won_super_bowl')),
+  auction_status text not null default 'pending'
+    check (auction_status in ('pending','active','sold')),
+  current_bid numeric,
+  current_bidder_entry_id uuid references entries(id),
   updated_at timestamptz not null default now()
-);
-
-create table if not exists entries (
-  id uuid primary key default gen_random_uuid(),
-  league_id uuid not null references leagues(id) on delete cascade,
-  owner_name text not null
 );
 
 create table if not exists bids (
@@ -46,3 +54,6 @@ create table if not exists bids (
 create index if not exists idx_teams_league on teams(league_id);
 create index if not exists idx_entries_league on entries(league_id);
 create index if not exists idx_bids_entry on bids(entry_id);
+
+-- Enables live updates to stream to every connected phone during the auction.
+alter publication supabase_realtime add table teams;
