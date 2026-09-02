@@ -62,11 +62,7 @@ export function validateConfig(config) {
  * @param {object} roundWeights
  */
 export function teamPlayoffPoints(team, roundWeights) {
-  const weight = roundWeights[team.furthestRound];
-  if (weight === undefined) {
-    throw new Error(`Unknown furthestRound "${team.furthestRound}"`);
-  }
-  return weight;
+  return roundWeights[team.furthestRound] ?? 0;
 }
 
 /**
