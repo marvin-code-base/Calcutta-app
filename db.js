@@ -227,6 +227,17 @@ export async function createEntry(leagueId, ownerName) {
   return data;
 }
 
+export async function setEntryPin(entryId, pin) {
+  const { data, error } = await supabase
+    .from("entries")
+    .update({ pin_code: pin })
+    .eq("id", entryId)
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+}
+
 export async function recordBid(entryId, teamId, bidAmount) {
   const { data, error } = await supabase
     .from("bids")

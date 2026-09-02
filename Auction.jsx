@@ -7,6 +7,7 @@ import {
   cancelAuction,
   subscribeToLeagueTeams,
   updateTeamOdds,
+  setEntryPin,
 } from "./db.js";
 import { minimumNextBid, isValidBid, secondsRemaining, computeDeadline, isWithinBidCap } from "./auctionRules.js";
 import { NFL_TEAMS } from "./nflTeams.js";
@@ -19,6 +20,12 @@ export default function Auction({ league, teams, entries, onTeamsChange }) {
   );
   const [bidValue, setBidValue] = useState("");
   const [message, setMessage] = useState("");
+
+  // Identity-claim flow state
+  const [claiming, setClaiming] = useState(null); // the entry being claimed, or null
+  const [pinInput, setPinInput] = useState("");
+  const [pinConfirm, setPinConfirm] = useState("");
+  const [pinError, setPinError] = useState("");
 
   useEffect(() => {
     const unsubscribe = subscribeToLeagueTeams(league.id, async () => {
@@ -58,12 +65,95 @@ export default function Auction({ league, teams, entries, onTeamsChange }) {
     });
   }, [activeTeamForTimer, remaining]);
 
-  function handleChooseIdentity(entryId) {
-    localStorage.setItem(IDENTITY_KEY, entryId);
-    setMyEntryId(entryId);
+  function startClaim(entry) {
+    setClaiming(entry);
+    setPinInput("");
+    setPinConfirm("");
+    setPinError("");
+  }
+
+  async function handleClaimSubmit(e) {
+    e.preventDefault();
+    setPinError("");
+    if (!/^\d{4}$/.test(pinInput)) {
+      setPinError("PIN must be exactly 4 digits.");
+      return;
+    }
+    if (claiming.pin_code) {
+      // Existing PIN — verify it matches.
+      if (pinInput !== claiming.pin_code) {
+        setPinError("Wrong PIN.");
+        return;
+      }
+    } else {
+      // No PIN set yet — this claim sets it.
+      if (pinInput !== pinConfirm) {
+        setPinError("PINs don't match.");
+        return;
+      }
+      try {
+        await setEntryPin(claiming.id, pinInput);
+      } catch (err) {
+        setPinError(err.message);
+        return;
+      }
+    }
+    localStorage.setItem(IDENTITY_KEY, claiming.id);
+    setMyEntryId(claiming.id);
+    setClaiming(null);
+  }
+
+  function handleSwitchIdentity() {
+    localStorage.removeItem(IDENTITY_KEY);
+    setMyEntryId("");
   }
 
   if (!myEntryId || !entries.find((e) => e.id === myEntryId)) {
+    if (claiming) {
+      return (
+        <div className="card">
+          <h2>{claiming.pin_code ? `Enter ${claiming.owner_name}'s PIN` : `Set a PIN for ${claiming.owner_name}`}</h2>
+          <p className="subtitle">
+            {claiming.pin_code
+              ? "This name already has a PIN set — enter it to bid as this person."
+              : "No one's claimed this name yet. Set a 4-digit PIN so only you can bid as this person."}
+          </p>
+          <form onSubmit={handleClaimSubmit}>
+            <label htmlFor="pin-input">PIN</label>
+            <input
+              id="pin-input"
+              type="tel"
+              inputMode="numeric"
+              maxLength={4}
+              value={pinInput}
+              onChange={(e) => setPinInput(e.target.value.replace(/\D/g, ""))}
+              autoFocus
+            />
+            {!claiming.pin_code && (
+              <>
+                <label htmlFor="pin-confirm">Confirm PIN</label>
+                <input
+                  id="pin-confirm"
+                  type="tel"
+                  inputMode="numeric"
+                  maxLength={4}
+                  value={pinConfirm}
+                  onChange={(e) => setPinConfirm(e.target.value.replace(/\D/g, ""))}
+                />
+              </>
+            )}
+            <button className="primary" type="submit" style={{ marginRight: "0.5rem" }}>
+              {claiming.pin_code ? "Confirm" : "Set PIN"}
+            </button>
+            <button className="secondary" type="button" onClick={() => setClaiming(null)}>
+              Back
+            </button>
+          </form>
+          {pinError && <p className="negative">{pinError}</p>}
+        </div>
+      );
+    }
+
     return (
       <div className="card">
         <h2>Who are you?</h2>
@@ -79,7 +169,7 @@ export default function Auction({ league, teams, entries, onTeamsChange }) {
                 key={entry.id}
                 className="secondary"
                 style={{ marginRight: "0.5rem", marginBottom: "0.5rem" }}
-                onClick={() => handleChooseIdentity(entry.id)}
+                onClick={() => startClaim(entry)}
               >
                 {entry.owner_name}
               </button>
@@ -151,7 +241,15 @@ export default function Auction({ league, teams, entries, onTeamsChange }) {
   return (
     <div>
       <div className="card">
-        <p className="subtitle" style={{ margin: 0 }}>Bidding as {me.owner_name}</p>
+        <p className="subtitle" style={{ margin: 0 }}>
+          Bidding as {me.owner_name} —{" "}
+          <span
+            style={{ textDecoration: "underline", cursor: "pointer" }}
+            onClick={handleSwitchIdentity}
+          >
+            not you? switch
+          </span>
+        </p>
       </div>
 
       <div className="card">

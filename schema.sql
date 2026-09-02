@@ -26,7 +26,8 @@ create table if not exists leagues (
 create table if not exists entries (
   id uuid primary key default gen_random_uuid(),
   league_id uuid not null references leagues(id) on delete cascade,
-  owner_name text not null
+  owner_name text not null,
+  pin_code text -- set by the bidder themselves the first time they claim their name
 );
 
 create table if not exists teams (
