@@ -12,6 +12,7 @@
 // per-win — so a first-round-bye team and a team that won a Wild Card game
 // land on identical points once both reach the Divisional round.
 export const ROUND_TIERS = [
+  "tbd", // not yet determined — the default until the team's fate is known
   "none", // did not make the playoffs — always 0 points
   "wild_card", // played and lost the Wild Card round
   "divisional", // reached Divisional round (bye, or won Wild Card)
@@ -25,6 +26,7 @@ export const DEFAULT_CONFIG = {
   regularSeasonPoolPct: 0.35,
   playoffPoolPct: 0.65,
   roundWeights: {
+    tbd: 0,
     none: 0,
     wild_card: 1,
     divisional: 2,

@@ -14,6 +14,17 @@ export default function Settings({ league, entries, onLeagueChange }) {
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
 
+  const intro = (
+    <div className="card">
+      <p className="subtitle" style={{ margin: 0 }}>
+        A Calcutta pool is an NFL auction: everyone bids to "own" teams, and
+        payouts are split based on how those teams actually perform — some
+        of the pot goes to regular-season wins, the rest to how far each
+        team goes in the playoffs. See league specific settings below.
+      </p>
+    </div>
+  );
+
   if (!league) {
     async function handleCreate(e) {
       e.preventDefault();
@@ -30,7 +41,9 @@ export default function Settings({ league, entries, onLeagueChange }) {
     }
 
     return (
-      <div className="card">
+      <div>
+        {intro}
+        <div className="card">
         <h2>Start your pool</h2>
         <form onSubmit={handleCreate}>
           <label htmlFor="league-name">Pool name</label>
@@ -54,6 +67,7 @@ export default function Settings({ league, entries, onLeagueChange }) {
           </button>
         </form>
         {error && <p className="negative">{error}</p>}
+        </div>
       </div>
     );
   }
@@ -115,6 +129,7 @@ export default function Settings({ league, entries, onLeagueChange }) {
 
   return (
     <div>
+      {intro}
       <div className="card">
         <h2>
           {league.name}
@@ -319,7 +334,7 @@ export default function Settings({ league, entries, onLeagueChange }) {
             </tr>
           </thead>
           <tbody>
-            {ROUND_TIERS.filter((t) => t !== "none").map((tier) => (
+            {ROUND_TIERS.filter((t) => t !== "none" && t !== "tbd").map((tier) => (
               <tr key={tier}>
                 <td>{ROUND_LABELS[tier]}</td>
                 <td className="num">

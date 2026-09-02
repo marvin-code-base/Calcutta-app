@@ -34,6 +34,7 @@ export const NFL_TEAMS = [
 ];
 
 export const ROUND_LABELS = {
+  tbd: "To be determined",
   none: "Missed playoffs",
   wild_card: "Lost Wild Card",
   divisional: "Reached Divisional",

@@ -34,9 +34,9 @@ create table if not exists teams (
   league_id uuid not null references leagues(id) on delete cascade,
   nfl_team_code text not null, -- e.g. 'KC', 'SF' — matches results API
   wins int not null default 0,
-  furthest_round text not null default 'none'
+  furthest_round text not null default 'tbd'
     check (furthest_round in
-      ('none','wild_card','divisional','conference','super_bowl','won_super_bowl')),
+      ('tbd','none','wild_card','divisional','conference','super_bowl','won_super_bowl')),
   auction_status text not null default 'pending'
     check (auction_status in ('pending','active','sold')),
   current_bid numeric,
