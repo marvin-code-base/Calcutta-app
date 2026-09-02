@@ -79,14 +79,14 @@ export default function Settings({ league, entries, onLeagueChange }) {
       if (updates.roundWeights !== undefined) {
         dbUpdates.round_weights = updates.roundWeights;
       }
-      if (updates.totalDecidedGames !== undefined) {
-        dbUpdates.total_decided_games = updates.totalDecidedGames;
-      }
       if (updates.startingBid !== undefined) {
         dbUpdates.starting_bid = updates.startingBid;
       }
       if (updates.bidTimeoutSeconds !== undefined) {
         dbUpdates.bid_timeout_seconds = updates.bidTimeoutSeconds;
+      }
+      if (updates.bidCap !== undefined) {
+        dbUpdates.bid_cap = updates.bidCap;
       }
       if (updates.incrementRules !== undefined) {
         dbUpdates.increment_rules = updates.incrementRules;
@@ -148,17 +148,13 @@ export default function Settings({ league, entries, onLeagueChange }) {
           </span>
         </p>
 
-        <label htmlFor="total-games">Total regular-season games decided league-wide (games minus ties)</label>
-        <input
-          id="total-games"
-          type="number"
-          min="1"
-          defaultValue={league.total_decided_games ?? ""}
-          onBlur={(e) => {
-            const v = Number(e.target.value);
-            if (v && v !== league.total_decided_games) handleFieldSave({ totalDecidedGames: v });
-          }}
-        />
+        <label htmlFor="total-games">Total regular-season games decided league-wide</label>
+        <p id="total-games" style={{ margin: "0 0 0.9rem", fontFamily: "var(--font-num)" }}>
+          {league.total_decided_games}
+          <span className="subtitle" style={{ display: "inline", marginLeft: "0.5rem" }}>
+            (272 games, minus any ties — adjusts automatically once results sync)
+          </span>
+        </p>
 
         <label htmlFor="starting-bid">Starting bid ($)</label>
         <input
@@ -185,6 +181,21 @@ export default function Settings({ league, entries, onLeagueChange }) {
           onBlur={(e) => {
             const v = Number(e.target.value);
             if (v !== league.bid_timeout_seconds) handleFieldSave({ bidTimeoutSeconds: v });
+          }}
+        />
+
+        <label htmlFor="bid-cap">Max total bids per player ($, blank = no cap)</label>
+        <input
+          id="bid-cap"
+          type="number"
+          step="1"
+          min="0"
+          disabled={locked}
+          defaultValue={league.bid_cap ?? ""}
+          onBlur={(e) => {
+            const raw = e.target.value;
+            const v = raw === "" ? null : Number(raw);
+            if (v !== league.bid_cap) handleFieldSave({ bidCap: v });
           }}
         />
 

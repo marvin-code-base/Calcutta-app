@@ -64,6 +64,15 @@ export function computeDeadline(timeoutSeconds, from = new Date()) {
 }
 
 /**
+ * Whether a new bid keeps an entry's total spend at or under its cap.
+ * cap === null/undefined means no cap — always allowed.
+ */
+export function isWithinBidCap(currentTotalBids, proposedAmount, cap) {
+  if (cap === null || cap === undefined || cap === "") return true;
+  return currentTotalBids + proposedAmount <= Number(cap);
+}
+
+/**
  * Whether a proposed bid is legal given the current state.
  */
 export function isValidBid(proposedAmount, currentBid, startingBid, incrementRules) {

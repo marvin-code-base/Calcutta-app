@@ -1,19 +1,18 @@
 import { useEffect, useState } from "react";
-import { getFirstLeague, getTeams, getEntries } from "./db.js";
+import { getFirstLeague, getTeams, getEntries, subscribeToBids } from "./db.js";
 import Settings from "./Settings.jsx";
-import Teams from "./Teams.jsx";
 import Entries from "./Entries.jsx";
 import Auction from "./Auction.jsx";
 import Dashboard from "./Dashboard.jsx";
 import "./styles.css";
 
-const TABS = ["Settings", "Teams", "Bidders", "Auction", "Dashboard"];
+const TABS = ["Dashboard", "Bidders", "Auction", "Settings"];
 
 export default function App() {
   const [league, setLeague] = useState(null);
   const [teams, setTeams] = useState([]);
   const [entries, setEntries] = useState([]);
-  const [tab, setTab] = useState("Settings");
+  const [tab, setTab] = useState("Dashboard");
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
 
@@ -26,6 +25,8 @@ export default function App() {
           const [t, e] = await Promise.all([getTeams(found.id), getEntries(found.id)]);
           setTeams(t);
           setEntries(e);
+        } else {
+          setTab("Settings");
         }
       } catch (err) {
         setLoadError(err.message);
@@ -36,6 +37,18 @@ export default function App() {
     bootstrap();
   }, []);
 
+  // Keeps entries (and their bid totals, used for the bid cap) fresh across
+  // every tab whenever any bid is placed or sold, not just the Auction tab.
+  useEffect(() => {
+    if (!league) return;
+    const unsubscribe = subscribeToBids(async () => {
+      const [t, e] = await Promise.all([getTeams(league.id), getEntries(league.id)]);
+      setTeams(t);
+      setEntries(e);
+    });
+    return unsubscribe;
+  }, [league?.id]);
+
   async function handleLeagueChange(updatedLeague) {
     setLeague(updatedLeague);
     if (updatedLeague) {
@@ -45,6 +58,7 @@ export default function App() {
       ]);
       setTeams(t);
       setEntries(e);
+      setTab("Dashboard");
     }
   }
 
@@ -73,9 +87,6 @@ export default function App() {
           {tab === "Settings" && (
             <Settings league={league} entries={entries} onLeagueChange={handleLeagueChange} />
           )}
-          {tab === "Teams" && league && (
-            <Teams league={league} teams={teams} onTeamsChange={setTeams} />
-          )}
           {tab === "Bidders" && league && (
             <Entries
               league={league}
@@ -93,7 +104,12 @@ export default function App() {
             />
           )}
           {tab === "Dashboard" && league && (
-            <Dashboard league={league} teams={teams} entries={entries} />
+            <Dashboard
+              league={league}
+              teams={teams}
+              entries={entries}
+              onTeamsChange={setTeams}
+            />
           )}
           {tab !== "Settings" && !league && (
             <div className="card">

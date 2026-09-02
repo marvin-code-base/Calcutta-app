@@ -11,14 +11,15 @@ create table if not exists leagues (
     "none": 0, "wild_card": 1, "divisional": 2,
     "conference": 4, "super_bowl": 8, "won_super_bowl": 16
   }',
-  total_decided_games int, -- set once schedule/tie count is known
-  jackpot numeric not null default 0,
+  total_decided_games int not null default 272, -- 272 regular-season games minus ties; ties auto-subtracted once results sync
+  jackpot numeric not null default 0, -- legacy column, no longer used (pot is derived from bids)
   locked boolean not null default false, -- true once bidding opens
   starting_bid numeric not null default 1,
   increment_rules jsonb not null default '[
     {"threshold": 0, "increment": 1}
   ]',
   bid_timeout_seconds int not null default 30, -- 0 disables the countdown/auto-sell
+  bid_cap numeric, -- max total spend per entry across all their teams; null = no cap
   created_at timestamptz not null default now()
 );
 
@@ -41,6 +42,8 @@ create table if not exists teams (
   current_bid numeric,
   current_bidder_entry_id uuid references entries(id),
   bid_deadline timestamptz,
+  reg_season_over_under numeric, -- entered manually on auction night
+  super_bowl_odds text, -- entered manually on auction night (e.g. "+2500")
   updated_at timestamptz not null default now()
 );
 

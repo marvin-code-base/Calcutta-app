@@ -7,6 +7,7 @@
  *      means the UI can keep calling these same functions unchanged.
  */
 import { supabase } from "./supabaseClient.js";
+import { NFL_TEAMS } from "./nflTeams.js";
 
 export async function getFirstLeague() {
   const { data, error } = await supabase
@@ -26,7 +27,43 @@ export async function createLeague({ name, seasonYear }) {
     .select()
     .single();
   if (error) throw error;
+
+  const { error: teamsError } = await supabase
+    .from("teams")
+    .insert(NFL_TEAMS.map((t) => ({ league_id: data.id, nfl_team_code: t.code })));
+  if (teamsError) throw teamsError;
+
   return data;
+}
+
+export async function updateTeamOdds(teamId, { regSeasonOverUnder, superBowlOdds }) {
+  const { data, error } = await supabase
+    .from("teams")
+    .update({
+      reg_season_over_under: regSeasonOverUnder,
+      super_bowl_odds: superBowlOdds,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", teamId)
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+/**
+ * Subscribe to any change in a league's bids (a sale happening). Realtime
+ * filters only support equality on columns of the subscribed table itself,
+ * and bids doesn't carry league_id — so this listens to all bid changes and
+ * lets the caller refetch its own league-scoped data. Fine at friend-group
+ * scale.
+ */
+export function subscribeToBids(onChange) {
+  const channel = supabase
+    .channel("bids-all")
+    .on("postgres_changes", { event: "*", schema: "public", table: "bids" }, onChange)
+    .subscribe();
+  return () => supabase.removeChannel(channel);
 }
 
 export async function addTeam(leagueId, nflTeamCode) {

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { createEntry, recordBid, getEntries } from "./db.js";
 import { NFL_TEAMS } from "./nflTeams.js";
+import { isWithinBidCap } from "./auctionRules.js";
 
 export default function Entries({ league, teams, entries, onEntriesChange }) {
   const [ownerName, setOwnerName] = useState("");
@@ -40,6 +41,14 @@ export default function Entries({ league, teams, entries, onEntriesChange }) {
   async function handleAddBid(e) {
     e.preventDefault();
     if (!bidEntryId || !bidTeamId || !bidAmount) return;
+    const targetEntry = entries.find((en) => en.id === bidEntryId);
+    const currentTotal = targetEntry
+      ? targetEntry.bids.reduce((s, b) => s + Number(b.bid_amount), 0)
+      : 0;
+    if (!isWithinBidCap(currentTotal, Number(bidAmount), league.bid_cap)) {
+      setError(`That would put ${targetEntry.owner_name} over the $${league.bid_cap} cap.`);
+      return;
+    }
     setSaving(true);
     setError("");
     try {

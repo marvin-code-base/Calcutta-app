@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { incrementAt, minimumNextBid, isValidBid, secondsRemaining, computeDeadline } from "./auctionRules.js";
+import { incrementAt, minimumNextBid, isValidBid, secondsRemaining, computeDeadline, isWithinBidCap } from "./auctionRules.js";
 
 const rules = [
   { threshold: 0, increment: 1 },
@@ -60,5 +60,19 @@ describe("computeDeadline", () => {
   it("adds the timeout in seconds to the given time", () => {
     const from = new Date("2026-01-01T00:00:00Z");
     expect(computeDeadline(30, from)).toBe("2026-01-01T00:00:30.000Z");
+  });
+});
+
+describe("isWithinBidCap", () => {
+  it("allows anything when there's no cap", () => {
+    expect(isWithinBidCap(500, 100, null)).toBe(true);
+    expect(isWithinBidCap(500, 100, undefined)).toBe(true);
+    expect(isWithinBidCap(500, 100, "")).toBe(true);
+  });
+  it("blocks a bid that would push total spend over the cap", () => {
+    expect(isWithinBidCap(80, 30, 100)).toBe(false);
+  });
+  it("allows a bid that lands exactly at the cap", () => {
+    expect(isWithinBidCap(70, 30, 100)).toBe(true);
   });
 });
