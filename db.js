@@ -20,10 +20,15 @@ export async function getFirstLeague() {
   return data;
 }
 
-export async function createLeague({ name, seasonYear }) {
+export async function createLeague({ name, seasonYear, joinPassword, hostPassword }) {
   const { data, error } = await supabase
     .from("leagues")
-    .insert({ name, season_year: seasonYear })
+    .insert({
+      name,
+      season_year: seasonYear,
+      join_password: joinPassword || "",
+      host_password: hostPassword || "",
+    })
     .select()
     .single();
   if (error) throw error;
@@ -36,19 +41,75 @@ export async function createLeague({ name, seasonYear }) {
   return data;
 }
 
-export async function updateTeamOdds(teamId, { regSeasonOverUnder, superBowlOdds }) {
+export async function searchLeagues(query) {
   const { data, error } = await supabase
-    .from("teams")
-    .update({
-      reg_season_over_under: regSeasonOverUnder,
-      super_bowl_odds: superBowlOdds,
-      updated_at: new Date().toISOString(),
-    })
-    .eq("id", teamId)
-    .select()
-    .single();
+    .from("leagues")
+    .select("id, name, season_year")
+    .ilike("name", `%${query}%`)
+    .order("created_at", { ascending: false })
+    .limit(10);
   if (error) throw error;
   return data;
+}
+
+/** Blank stored password (legacy leagues from before this feature) means open — anyone can join. */
+export async function verifyJoinPassword(leagueId, password) {
+  const { data, error } = await supabase
+    .from("leagues")
+    .select("join_password")
+    .eq("id", leagueId)
+    .single();
+  if (error) throw error;
+  return !data.join_password || data.join_password === password;
+}
+
+/**
+ * Claims host for a league whose host_password is still blank — first
+ * come, first served. Fails harmlessly if someone else claimed it a moment
+ * earlier (the .eq("host_password", "") guard means zero rows come back).
+ */
+export async function claimHostPassword(leagueId, password) {
+  const { data, error } = await supabase
+    .from("leagues")
+    .update({ host_password: password })
+    .eq("id", leagueId)
+    .eq("host_password", "")
+    .select();
+  if (error) throw error;
+  if (!data || data.length === 0) {
+    throw new Error("Someone already claimed host for this league — ask them for the host password.");
+  }
+  return data[0];
+}
+
+export async function verifyHostPassword(leagueId, password) {
+  const { data, error } = await supabase
+    .from("leagues")
+    .select("host_password")
+    .eq("id", leagueId)
+    .single();
+  if (error) throw error;
+  return data.host_password === password;
+}
+
+/**
+ * Odds are shared across every league for a given season — entered
+ * directly via SQL, not through the app. Returns a map keyed by team code.
+ */
+export async function getTeamOdds(seasonYear) {
+  const { data, error } = await supabase
+    .from("team_odds")
+    .select("nfl_team_code, reg_season_over_under, super_bowl_odds")
+    .eq("season_year", seasonYear);
+  if (error) throw error;
+  const map = {};
+  for (const row of data) {
+    map[row.nfl_team_code] = {
+      regSeasonOverUnder: row.reg_season_over_under,
+      superBowlOdds: row.super_bowl_odds,
+    };
+  }
+  return map;
 }
 
 /**

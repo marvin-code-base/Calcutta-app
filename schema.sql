@@ -20,6 +20,8 @@ create table if not exists leagues (
   ]',
   bid_timeout_seconds int not null default 30, -- 0 disables the countdown/auto-sell
   bid_cap numeric, -- max total spend per entry across all their teams; null = no cap
+  join_password text not null default '', -- shared with friends to find & join the pool
+  host_password text not null default '', -- unlocks settings editing; claimed by whoever sets it first
   created_at timestamptz not null default now()
 );
 
@@ -43,9 +45,19 @@ create table if not exists teams (
   current_bid numeric,
   current_bidder_entry_id uuid references entries(id),
   bid_deadline timestamptz,
-  reg_season_over_under numeric, -- entered manually on auction night
-  super_bowl_odds text, -- entered manually on auction night (e.g. "+2500")
   updated_at timestamptz not null default now()
+);
+
+-- Betting odds are the same fact for everyone regardless of which pool
+-- they're in, so this is shared across leagues by season year + team code
+-- rather than duplicated per-league. Entered directly via SQL, not the app.
+create table if not exists team_odds (
+  id uuid primary key default gen_random_uuid(),
+  season_year int not null,
+  nfl_team_code text not null,
+  reg_season_over_under numeric,
+  super_bowl_odds text,
+  unique (season_year, nfl_team_code)
 );
 
 create table if not exists bids (

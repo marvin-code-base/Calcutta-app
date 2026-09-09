@@ -6,7 +6,6 @@ import {
   sellCurrentTeam,
   cancelAuction,
   subscribeToLeagueTeams,
-  updateTeamOdds,
   setEntryPin,
 } from "./db.js";
 import { minimumNextBid, isValidBid, secondsRemaining, computeDeadline, isWithinBidCap } from "./auctionRules.js";
@@ -14,7 +13,7 @@ import { NFL_TEAMS } from "./nflTeams.js";
 
 const IDENTITY_KEY = "calcutta_my_entry_id";
 
-export default function Auction({ league, teams, entries, onTeamsChange }) {
+export default function Auction({ league, teams, entries, odds, onTeamsChange }) {
   const [myEntryId, setMyEntryId] = useState(
     () => localStorage.getItem(IDENTITY_KEY) || ""
   );
@@ -261,47 +260,17 @@ export default function Auction({ league, teams, entries, onTeamsChange }) {
             <p style={{ fontFamily: "var(--font-display)", fontSize: "1.3rem", margin: "0 0 0.25rem" }}>
               {teamName(activeTeam.nfl_team_code)}
             </p>
-            <div style={{ display: "flex", gap: "0.75rem", marginBottom: "0.75rem" }}>
-              <div style={{ flex: 1 }}>
-                <label htmlFor="reg-ou" style={{ marginBottom: "0.2rem" }}>Reg. season O/U</label>
-                <input
-                  id="reg-ou"
-                  type="number"
-                  step="0.5"
-                  style={{ marginBottom: 0 }}
-                  defaultValue={activeTeam.reg_season_over_under ?? ""}
-                  placeholder="e.g. 9.5"
-                  onBlur={(e) => {
-                    const v = e.target.value === "" ? null : Number(e.target.value);
-                    if (v !== activeTeam.reg_season_over_under) {
-                      updateTeamOdds(activeTeam.id, {
-                        regSeasonOverUnder: v,
-                        superBowlOdds: activeTeam.super_bowl_odds,
-                      });
-                    }
-                  }}
-                />
-              </div>
-              <div style={{ flex: 1 }}>
-                <label htmlFor="sb-odds" style={{ marginBottom: "0.2rem" }}>Super Bowl odds</label>
-                <input
-                  id="sb-odds"
-                  type="text"
-                  style={{ marginBottom: 0 }}
-                  defaultValue={activeTeam.super_bowl_odds ?? ""}
-                  placeholder="e.g. +2500"
-                  onBlur={(e) => {
-                    const v = e.target.value === "" ? null : e.target.value;
-                    if (v !== activeTeam.super_bowl_odds) {
-                      updateTeamOdds(activeTeam.id, {
-                        regSeasonOverUnder: activeTeam.reg_season_over_under,
-                        superBowlOdds: v,
-                      });
-                    }
-                  }}
-                />
-              </div>
-            </div>
+            {(() => {
+              const teamOdds = odds?.[activeTeam.nfl_team_code];
+              if (!teamOdds || (!teamOdds.regSeasonOverUnder && !teamOdds.superBowlOdds)) return null;
+              return (
+                <p className="subtitle" style={{ marginBottom: "0.5rem" }}>
+                  {teamOdds.regSeasonOverUnder ? `Reg. season O/U ${teamOdds.regSeasonOverUnder}` : ""}
+                  {teamOdds.regSeasonOverUnder && teamOdds.superBowlOdds ? " · " : ""}
+                  {teamOdds.superBowlOdds ? `Super Bowl ${teamOdds.superBowlOdds}` : ""}
+                </p>
+              );
+            })()}
             <p className="subtitle">
               {activeTeam.current_bid
                 ? `High bid: $${activeTeam.current_bid} (${entryName(activeTeam.current_bidder_entry_id)})`

@@ -8,7 +8,7 @@ import {
 import { updateTeamResult, getTeams } from "./db.js";
 import { NFL_TEAMS, ROUND_LABELS } from "./nflTeams.js";
 
-export default function Dashboard({ league, teams, entries, onTeamsChange }) {
+export default function Dashboard({ league, teams, entries, odds, onTeamsChange }) {
   const [syncing, setSyncing] = useState(false);
   const [syncMessage, setSyncMessage] = useState("");
 
@@ -40,6 +40,8 @@ export default function Dashboard({ league, teams, entries, onTeamsChange }) {
     const refreshed = await getTeams(league.id);
     onTeamsChange(refreshed);
   }
+
+  const teamName = (code) => NFL_TEAMS.find((t) => t.code === code)?.name ?? code;
 
   if (teams.length === 0 || entries.length === 0) {
     return (
@@ -73,8 +75,6 @@ export default function Dashboard({ league, teams, entries, onTeamsChange }) {
     (sum, entry) => sum + entry.bids.reduce((s, b) => s + Number(b.bid_amount), 0),
     0
   );
-
-  const teamName = (code) => NFL_TEAMS.find((t) => t.code === code)?.name ?? code;
 
   return (
     <div>
@@ -124,39 +124,42 @@ export default function Dashboard({ league, teams, entries, onTeamsChange }) {
                 </tr>
               </thead>
               <tbody>
-                {rows.map((row) => (
-                  <tr key={row.team?.id}>
-                    <td>
-                      {row.team ? teamName(row.team.nfl_team_code) : "—"}
-                      {row.team && (row.team.reg_season_over_under || row.team.super_bowl_odds) && (
-                        <div className="subtitle" style={{ fontSize: "0.7rem" }}>
-                          {row.team.reg_season_over_under ? `O/U ${row.team.reg_season_over_under}` : ""}
-                          {row.team.reg_season_over_under && row.team.super_bowl_odds ? " · " : ""}
-                          {row.team.super_bowl_odds ? `SB ${row.team.super_bowl_odds}` : ""}
-                        </div>
-                      )}
-                    </td>
-                    <td className="num">${row.bidAmount.toFixed(2)}</td>
-                    <td className="num">${row.wonBack.toFixed(2)}</td>
-                    <td className={`num ${row.roiPct >= 1 ? "positive" : "negative"}`}>
-                      {(row.roiPct * 100).toFixed(0)}%
-                    </td>
-                    <td>
-                      {row.team && (
-                        <select
-                          defaultValue={row.team.furthest_round}
-                          onChange={(e) => handleRoundChange(row.team, e.target.value)}
-                        >
-                          {ROUND_TIERS.map((tier) => (
-                            <option key={tier} value={tier}>
-                              {ROUND_LABELS[tier]}
-                            </option>
-                          ))}
-                        </select>
-                      )}
-                    </td>
-                  </tr>
-                ))}
+                {rows.map((row) => {
+                  const teamOdds = row.team ? odds?.[row.team.nfl_team_code] : null;
+                  return (
+                    <tr key={row.team?.id}>
+                      <td>
+                        {row.team ? teamName(row.team.nfl_team_code) : "—"}
+                        {teamOdds && (teamOdds.regSeasonOverUnder || teamOdds.superBowlOdds) && (
+                          <div className="subtitle" style={{ fontSize: "0.7rem" }}>
+                            {teamOdds.regSeasonOverUnder ? `O/U ${teamOdds.regSeasonOverUnder}` : ""}
+                            {teamOdds.regSeasonOverUnder && teamOdds.superBowlOdds ? " · " : ""}
+                            {teamOdds.superBowlOdds ? `SB ${teamOdds.superBowlOdds}` : ""}
+                          </div>
+                        )}
+                      </td>
+                      <td className="num">${row.bidAmount.toFixed(2)}</td>
+                      <td className="num">${row.wonBack.toFixed(2)}</td>
+                      <td className={`num ${row.roiPct >= 1 ? "positive" : "negative"}`}>
+                        {(row.roiPct * 100).toFixed(0)}%
+                      </td>
+                      <td>
+                        {row.team && (
+                          <select
+                            defaultValue={row.team.furthest_round}
+                            onChange={(e) => handleRoundChange(row.team, e.target.value)}
+                          >
+                            {ROUND_TIERS.map((tier) => (
+                              <option key={tier} value={tier}>
+                                {ROUND_LABELS[tier]}
+                              </option>
+                            ))}
+                          </select>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
               <tfoot>
                 <tr>
