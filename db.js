@@ -193,12 +193,31 @@ export async function cancelAuction(teamId) {
   return data;
 }
 
+/**
+ * Marks a team sold and records the winning bid — but only if the team's
+ * current_bid and current_bidder_entry_id in the database still match what
+ * the caller is trying to sell for. This guards against two devices (or a
+ * stale screen) both trying to close out the same team with different
+ * numbers; whichever request matches the true database state wins, and the
+ * other safely no-ops instead of recording the wrong winner or amount.
+ */
 export async function sellCurrentTeam(teamId, entryId, amount) {
-  const { error: teamError } = await supabase
+  const { data, error: teamError } = await supabase
     .from("teams")
     .update({ auction_status: "sold" })
-    .eq("id", teamId);
+    .eq("id", teamId)
+    .eq("auction_status", "active")
+    .eq("current_bid", amount)
+    .eq("current_bidder_entry_id", entryId)
+    .select();
   if (teamError) throw teamError;
+  if (!data || data.length === 0) {
+    // Someone else's version of "current" didn't match the database — the
+    // bid must have changed (or it already got sold) between when this was
+    // triggered and now. Safe to skip; the caller's next refresh will show
+    // the real state.
+    return null;
+  }
   return recordBid(entryId, teamId, amount);
 }
 

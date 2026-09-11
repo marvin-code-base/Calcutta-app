@@ -226,12 +226,6 @@ export default function Auction({ league, teams, entries, odds, onTeamsChange })
     await startAuction(randomTeam.id);
   }
 
-  async function handleSell() {
-    if (!activeTeam?.current_bidder_entry_id) return;
-    if (!confirm(`Sell ${teamName(activeTeam.nfl_team_code)} to ${entryName(activeTeam.current_bidder_entry_id)} for $${activeTeam.current_bid}?`)) return;
-    await sellCurrentTeam(activeTeam.id, activeTeam.current_bidder_entry_id, activeTeam.current_bid);
-  }
-
   async function handleCancel() {
     if (!confirm("Cancel this team's auction with no sale?")) return;
     await cancelAuction(activeTeam.id);
@@ -311,14 +305,11 @@ export default function Auction({ league, teams, entries, odds, onTeamsChange })
           )
         ) : (
           <>
-            <button
-              className="primary"
-              onClick={handleSell}
-              disabled={!activeTeam.current_bidder_entry_id}
-              style={{ marginRight: "0.5rem" }}
-            >
-              Sell to high bidder
-            </button>
+            <p className="subtitle">
+              {activeTeam.current_bidder_entry_id
+                ? "This team sells automatically when the countdown runs out — no button needed."
+                : "Waiting for the first bid."}
+            </p>
             <button className="secondary" onClick={handleCancel}>
               Cancel (no sale)
             </button>
