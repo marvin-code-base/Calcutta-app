@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { getLeague, getTeams, getEntries, subscribeToBids, getTeamOdds } from "./db.js";
+import { getLeague, getTeams, getEntries, subscribeToBids, getTeamOdds, getGames } from "./db.js";
 import Settings from "./Settings.jsx";
 import Entries from "./Entries.jsx";
 import Auction from "./Auction.jsx";
@@ -14,6 +14,7 @@ export default function App() {
   const [teams, setTeams] = useState([]);
   const [entries, setEntries] = useState([]);
   const [odds, setOdds] = useState({});
+  const [games, setGames] = useState([]);
   const [tab, setTab] = useState("Dashboard");
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
@@ -26,14 +27,16 @@ export default function App() {
           try {
             const found = await getLeague(storedId);
             setLeague(found);
-            const [t, e, o] = await Promise.all([
+            const [t, e, o, g] = await Promise.all([
               getTeams(found.id),
               getEntries(found.id),
               getTeamOdds(found.season_year),
+              getGames(found.season_year),
             ]);
             setTeams(t);
             setEntries(e);
             setOdds(o);
+            setGames(g);
           } catch {
             // League no longer exists (or a stale id) — fall back to the picker.
             localStorage.removeItem(LEAGUE_KEY);
@@ -68,14 +71,16 @@ export default function App() {
   async function handleLeagueSelected(selectedLeague) {
     localStorage.setItem(LEAGUE_KEY, selectedLeague.id);
     setLeague(selectedLeague);
-    const [t, e, o] = await Promise.all([
+    const [t, e, o, g] = await Promise.all([
       getTeams(selectedLeague.id),
       getEntries(selectedLeague.id),
       getTeamOdds(selectedLeague.season_year),
+      getGames(selectedLeague.season_year),
     ]);
     setTeams(t);
     setEntries(e);
     setOdds(o);
+    setGames(g);
     setTab("Dashboard");
   }
 
@@ -91,7 +96,14 @@ export default function App() {
     setTeams([]);
     setEntries([]);
     setOdds({});
+    setGames([]);
     setTab("Settings");
+  }
+
+  async function handleGamesSynced() {
+    if (!league) return;
+    const g = await getGames(league.season_year);
+    setGames(g);
   }
 
   return (
@@ -147,7 +159,9 @@ export default function App() {
               teams={teams}
               entries={entries}
               odds={odds}
+              games={games}
               onTeamsChange={setTeams}
+              onGamesSynced={handleGamesSynced}
             />
           )}
           {tab !== "Settings" && !league && (

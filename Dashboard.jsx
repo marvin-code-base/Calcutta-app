@@ -3,15 +3,17 @@ import {
   computePlayoffShares,
   computeRegularSeasonShares,
   computeTeamRoi,
-  computeHeadToHead,
   ROUND_TIERS,
 } from "./scoring.js";
+import { computeGameBasedHeadToHead } from "./gameLedger.js";
 import { updateTeamResult, getTeams } from "./db.js";
 import { NFL_TEAMS, ROUND_LABELS } from "./nflTeams.js";
 
-export default function Dashboard({ league, teams, entries, odds, onTeamsChange }) {
+export default function Dashboard({ league, teams, entries, odds, games, onTeamsChange, onGamesSynced }) {
   const [syncing, setSyncing] = useState(false);
   const [syncMessage, setSyncMessage] = useState("");
+  const [syncingGames, setSyncingGames] = useState(false);
+  const [syncGamesMessage, setSyncGamesMessage] = useState("");
 
   async function handleSync() {
     setSyncing(true);
@@ -33,6 +35,28 @@ export default function Dashboard({ league, teams, entries, odds, onTeamsChange 
       setSyncMessage(`Sync failed: ${err.message}`);
     } finally {
       setSyncing(false);
+    }
+  }
+
+  async function handleSyncGames() {
+    setSyncingGames(true);
+    setSyncGamesMessage("");
+    try {
+      const res = await fetch("/api/sync-games", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ leagueId: league.id }),
+      });
+      const result = await res.json();
+      if (!res.ok) throw new Error(result.error || "Sync failed");
+      setSyncGamesMessage(
+        `Synced ${result.totalGames} games · ${result.completedGames} completed so far.`
+      );
+      await onGamesSynced();
+    } catch (err) {
+      setSyncGamesMessage(`Sync failed: ${err.message}`);
+    } finally {
+      setSyncingGames(false);
     }
   }
 
@@ -77,8 +101,6 @@ export default function Dashboard({ league, teams, entries, odds, onTeamsChange 
     0
   );
 
-  // One pass per entry: compute every team's ROI plus the entry's totals,
-  // so both the head-to-head matrix and the per-entry cards below can reuse it.
   const entrySummaries = entries.map((entry) => {
     const rows = entry.bids.map((bid) => {
       const team = teams.find((t) => t.id === bid.team_id);
@@ -98,15 +120,36 @@ export default function Dashboard({ league, teams, entries, odds, onTeamsChange 
       rows,
       totalBid,
       totalWonBack,
-      net: totalWonBack - totalBid,
       aggregateRoi: totalBid > 0 ? totalWonBack / totalBid : 0,
     };
   });
 
-  const headToHead = computeHeadToHead(
-    entrySummaries.map((s) => ({ id: s.entry.id, net: s.net }))
+  // Gross head-to-head: who's won money from who, based on actual game
+  // matchups (not just net profit/loss) — see gameLedger.js for the rules.
+  const teamCodeToEntryId = {};
+  const teamCodeToFurthestRound = {};
+  for (const team of teams) {
+    teamCodeToFurthestRound[team.nfl_team_code] = team.furthest_round;
+  }
+  for (const entry of entries) {
+    for (const bid of entry.bids) {
+      const team = teams.find((t) => t.id === bid.team_id);
+      if (team) teamCodeToEntryId[team.nfl_team_code] = entry.id;
+    }
+  }
+  const headToHead = computeGameBasedHeadToHead({
+    games,
+    teamCodeToEntryId,
+    teamCodeToFurthestRound,
+    roundWeights: league.round_weights,
+    playoffPoolPct: league.playoff_pool_pct,
+    regularSeasonPoolPct: league.regular_season_pool_pct,
+    jackpot,
+    totalDecidedGames: league.total_decided_games,
+  });
+  const hasAnyHeadToHeadMoney = Object.values(headToHead).some(
+    (row) => Object.keys(row).length > 0
   );
-  const anyMoneyChangedHands = entrySummaries.some((s) => s.net !== 0);
 
   return (
     <div>
@@ -114,13 +157,24 @@ export default function Dashboard({ league, teams, entries, odds, onTeamsChange 
         <h2 style={{ margin: 0 }}>Total pot: ${jackpot.toFixed(2)}</h2>
       </div>
 
-      {anyMoneyChangedHands && (
-        <div className="card">
-          <h2>Head-to-head</h2>
-          <p className="subtitle">
-            Who's up money from who, right now — split proportionally since
-            it's all coming out of one shared pot, not literally bidder to bidder.
+      <div className="card">
+        <h2>Head-to-head</h2>
+        <p className="subtitle">
+          Money won from each other bidder, based on actual games — a
+          regular-season win transfers a fixed amount from the loser's
+          bidder; making the playoffs spreads that credit across the
+          regular-season wins that got you there; each playoff win takes an
+          incremental amount from the specific opponent beaten.
+        </p>
+        {games.length === 0 ? (
+          <p className="subtitle" style={{ marginBottom: 0 }}>
+            No game results synced yet — tap below to pull this season's schedule and scores.
           </p>
+        ) : !hasAnyHeadToHeadMoney ? (
+          <p className="subtitle" style={{ marginBottom: 0 }}>
+            No completed games between different bidders' teams yet.
+          </p>
+        ) : (
           <table>
             <thead>
               <tr>
@@ -139,7 +193,7 @@ export default function Dashboard({ league, teams, entries, odds, onTeamsChange 
                       return <td key={colSummary.entry.id} className="num">—</td>;
                     }
                     const amount = headToHead[rowSummary.entry.id]?.[colSummary.entry.id];
-                    if (amount === undefined) {
+                    if (!amount) {
                       return <td key={colSummary.entry.id} className="num">—</td>;
                     }
                     return (
@@ -147,7 +201,7 @@ export default function Dashboard({ league, teams, entries, odds, onTeamsChange 
                         key={colSummary.entry.id}
                         className={`num ${amount >= 0 ? "positive" : "negative"}`}
                       >
-                        {amount >= 0 ? "+" : "-"}${Math.abs(amount).toFixed(0)}
+                        {amount >= 0 ? "+" : "-"}${Math.abs(amount).toFixed(2)}
                       </td>
                     );
                   })}
@@ -155,8 +209,12 @@ export default function Dashboard({ league, teams, entries, odds, onTeamsChange 
               ))}
             </tbody>
           </table>
-        </div>
-      )}
+        )}
+        <button className="secondary" onClick={handleSyncGames} disabled={syncingGames} style={{ marginTop: "0.75rem" }}>
+          {syncingGames ? "Syncing…" : "Sync game results now"}
+        </button>
+        {syncGamesMessage && <p className="subtitle" style={{ marginTop: "0.5rem", marginBottom: 0 }}>{syncGamesMessage}</p>}
+      </div>
 
       <div className="card">
         <button className="secondary" onClick={handleSync} disabled={syncing}>
@@ -164,8 +222,8 @@ export default function Dashboard({ league, teams, entries, odds, onTeamsChange 
         </button>
         {syncMessage && <p className="subtitle" style={{ marginTop: "0.5rem" }}>{syncMessage}</p>}
         <p className="subtitle" style={{ marginBottom: 0 }}>
-          Pulls current NFL win totals automatically. Playoff round still
-          needs to be set by hand below once the postseason starts.
+          Pulls current NFL win totals for the ROI table below. Playoff round
+          still needs to be set by hand once the postseason starts.
         </p>
       </div>
 

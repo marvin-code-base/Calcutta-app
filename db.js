@@ -237,6 +237,25 @@ export function subscribeToLeagueTeams(leagueId, onChange) {
   return () => supabase.removeChannel(channel);
 }
 
+/**
+ * Game-by-game results are shared across leagues for a given season, same
+ * as team_odds — entered via the sync-games serverless function.
+ */
+export async function getGames(seasonYear) {
+  const { data, error } = await supabase
+    .from("games")
+    .select("season_type, home_team_code, away_team_code, winner_team_code, completed")
+    .eq("season_year", seasonYear);
+  if (error) throw error;
+  return data.map((g) => ({
+    seasonType: g.season_type,
+    homeTeamCode: g.home_team_code,
+    awayTeamCode: g.away_team_code,
+    winnerTeamCode: g.winner_team_code,
+    completed: g.completed,
+  }));
+}
+
 export async function getLeague(leagueId) {
   const { data, error } = await supabase
     .from("leagues")
