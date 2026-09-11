@@ -4,6 +4,7 @@ import {
   computePlayoffShares,
   computeRegularSeasonShares,
   computeEntryPayout,
+  computeHeadToHead,
   validateConfig,
 } from "./scoring.js";
 
@@ -71,5 +72,39 @@ describe("computeEntryPayout", () => {
     expect(result.playoffPayout).toBeCloseTo(0.5 * 0.65 * 10000, 5); // 3250
     expect(result.regularSeasonPayout).toBeCloseTo(0.2 * 0.35 * 10000, 5); // 700
     expect(result.totalPayout).toBeCloseTo(3950, 5);
+  });
+});
+
+describe("computeHeadToHead", () => {
+  it("splits a winner's gain across losers proportional to their losses", () => {
+    const entries = [
+      { id: "a", net: 50 },
+      { id: "b", net: -30 },
+      { id: "c", net: -20 },
+    ];
+    const matrix = computeHeadToHead(entries);
+    expect(matrix.a.b).toBeCloseTo(30, 5);
+    expect(matrix.a.c).toBeCloseTo(20, 5);
+    expect(matrix.b.a).toBeCloseTo(-30, 5);
+    expect(matrix.c.a).toBeCloseTo(-20, 5);
+  });
+
+  it("returns an empty matrix when nobody has a negative net", () => {
+    const entries = [{ id: "a", net: 0 }, { id: "b", net: 0 }];
+    const matrix = computeHeadToHead(entries);
+    expect(matrix.a).toEqual({});
+    expect(matrix.b).toEqual({});
+  });
+
+  it("leaves same-sign pairs (two winners, or two losers) with no entry", () => {
+    const entries = [
+      { id: "a", net: 30 },
+      { id: "b", net: 20 },
+      { id: "c", net: -50 },
+    ];
+    const matrix = computeHeadToHead(entries);
+    expect(matrix.a.b).toBeUndefined();
+    expect(matrix.a.c).toBeCloseTo(30, 5);
+    expect(matrix.b.c).toBeCloseTo(20, 5);
   });
 });

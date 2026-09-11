@@ -3,6 +3,7 @@ import {
   computePlayoffShares,
   computeRegularSeasonShares,
   computeTeamRoi,
+  computeHeadToHead,
   ROUND_TIERS,
 } from "./scoring.js";
 import { updateTeamResult, getTeams } from "./db.js";
@@ -76,11 +77,86 @@ export default function Dashboard({ league, teams, entries, odds, onTeamsChange 
     0
   );
 
+  // One pass per entry: compute every team's ROI plus the entry's totals,
+  // so both the head-to-head matrix and the per-entry cards below can reuse it.
+  const entrySummaries = entries.map((entry) => {
+    const rows = entry.bids.map((bid) => {
+      const team = teams.find((t) => t.id === bid.team_id);
+      const { wonBack, roiPct } = computeTeamRoi(
+        { teamId: bid.team_id, bidAmount: Number(bid.bid_amount) },
+        playoffShares[bid.team_id] ?? 0,
+        regularSeasonShares[bid.team_id] ?? 0,
+        config,
+        jackpot
+      );
+      return { team, bidAmount: Number(bid.bid_amount), wonBack, roiPct };
+    });
+    const totalBid = rows.reduce((s, r) => s + r.bidAmount, 0);
+    const totalWonBack = rows.reduce((s, r) => s + r.wonBack, 0);
+    return {
+      entry,
+      rows,
+      totalBid,
+      totalWonBack,
+      net: totalWonBack - totalBid,
+      aggregateRoi: totalBid > 0 ? totalWonBack / totalBid : 0,
+    };
+  });
+
+  const headToHead = computeHeadToHead(
+    entrySummaries.map((s) => ({ id: s.entry.id, net: s.net }))
+  );
+  const anyMoneyChangedHands = entrySummaries.some((s) => s.net !== 0);
+
   return (
     <div>
       <div className="card">
         <h2 style={{ margin: 0 }}>Total pot: ${jackpot.toFixed(2)}</h2>
       </div>
+
+      {anyMoneyChangedHands && (
+        <div className="card">
+          <h2>Head-to-head</h2>
+          <p className="subtitle">
+            Who's up money from who, right now — split proportionally since
+            it's all coming out of one shared pot, not literally bidder to bidder.
+          </p>
+          <table>
+            <thead>
+              <tr>
+                <th>Bidder</th>
+                {entrySummaries.map((s) => (
+                  <th key={s.entry.id} className="num">{s.entry.owner_name}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {entrySummaries.map((rowSummary) => (
+                <tr key={rowSummary.entry.id}>
+                  <td>{rowSummary.entry.owner_name}</td>
+                  {entrySummaries.map((colSummary) => {
+                    if (rowSummary.entry.id === colSummary.entry.id) {
+                      return <td key={colSummary.entry.id} className="num">—</td>;
+                    }
+                    const amount = headToHead[rowSummary.entry.id]?.[colSummary.entry.id];
+                    if (amount === undefined) {
+                      return <td key={colSummary.entry.id} className="num">—</td>;
+                    }
+                    return (
+                      <td
+                        key={colSummary.entry.id}
+                        className={`num ${amount >= 0 ? "positive" : "negative"}`}
+                      >
+                        {amount >= 0 ? "+" : "-"}${Math.abs(amount).toFixed(0)}
+                      </td>
+                    );
+                  })}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
 
       <div className="card">
         <button className="secondary" onClick={handleSync} disabled={syncing}>
@@ -93,89 +169,71 @@ export default function Dashboard({ league, teams, entries, odds, onTeamsChange 
         </p>
       </div>
 
-      {entries.map((entry) => {
-        const rows = entry.bids.map((bid) => {
-          const team = teams.find((t) => t.id === bid.team_id);
-          const { wonBack, roiPct } = computeTeamRoi(
-            { teamId: bid.team_id, bidAmount: Number(bid.bid_amount) },
-            playoffShares[bid.team_id] ?? 0,
-            regularSeasonShares[bid.team_id] ?? 0,
-            config,
-            jackpot
-          );
-          return { team, bidAmount: Number(bid.bid_amount), wonBack, roiPct };
-        });
-
-        const totalBid = rows.reduce((s, r) => s + r.bidAmount, 0);
-        const totalWonBack = rows.reduce((s, r) => s + r.wonBack, 0);
-        const aggregateRoi = totalBid > 0 ? totalWonBack / totalBid : 0;
-
-        return (
-          <div className="card" key={entry.id}>
-            <h2>{entry.owner_name}</h2>
-            <table>
-              <thead>
-                <tr>
-                  <th>Team</th>
-                  <th className="num">Bid</th>
-                  <th className="num">Won back</th>
-                  <th className="num">ROI</th>
-                  <th>Playoff round</th>
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((row) => {
-                  const teamOdds = row.team ? odds?.[row.team.nfl_team_code] : null;
-                  return (
-                    <tr key={row.team?.id}>
-                      <td>
-                        {row.team ? teamName(row.team.nfl_team_code) : "—"}
-                        {teamOdds && (teamOdds.regSeasonOverUnder || teamOdds.superBowlOdds) && (
-                          <div className="subtitle" style={{ fontSize: "0.7rem" }}>
-                            {teamOdds.regSeasonOverUnder ? `O/U ${teamOdds.regSeasonOverUnder}` : ""}
-                            {teamOdds.regSeasonOverUnder && teamOdds.superBowlOdds ? " · " : ""}
-                            {teamOdds.superBowlOdds ? `SB ${teamOdds.superBowlOdds}` : ""}
-                          </div>
-                        )}
-                      </td>
-                      <td className="num">${row.bidAmount.toFixed(2)}</td>
-                      <td className="num">${row.wonBack.toFixed(2)}</td>
-                      <td className={`num ${row.roiPct >= 1 ? "positive" : "negative"}`}>
-                        {(row.roiPct * 100).toFixed(0)}%
-                      </td>
-                      <td>
-                        {row.team && (
-                          <select
-                            defaultValue={row.team.furthest_round}
-                            onChange={(e) => handleRoundChange(row.team, e.target.value)}
-                          >
-                            {ROUND_TIERS.map((tier) => (
-                              <option key={tier} value={tier}>
-                                {ROUND_LABELS[tier]}
-                              </option>
-                            ))}
-                          </select>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-              <tfoot>
-                <tr>
-                  <th>Total</th>
-                  <th className="num">${totalBid.toFixed(2)}</th>
-                  <th className="num">${totalWonBack.toFixed(2)}</th>
-                  <th className={`num ${aggregateRoi >= 1 ? "positive" : "negative"}`}>
-                    {(aggregateRoi * 100).toFixed(0)}%
-                  </th>
-                  <th></th>
-                </tr>
-              </tfoot>
-            </table>
-          </div>
-        );
-      })}
+      {entrySummaries.map(({ entry, rows, totalBid, totalWonBack, aggregateRoi }) => (
+        <div className="card" key={entry.id}>
+          <h2>{entry.owner_name}</h2>
+          <table>
+            <thead>
+              <tr>
+                <th>Team</th>
+                <th className="num">Bid</th>
+                <th className="num">Won back</th>
+                <th className="num">ROI</th>
+                <th>Playoff round</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((row) => {
+                const teamOdds = row.team ? odds?.[row.team.nfl_team_code] : null;
+                return (
+                  <tr key={row.team?.id}>
+                    <td>
+                      {row.team ? teamName(row.team.nfl_team_code) : "—"}
+                      {teamOdds && (teamOdds.regSeasonOverUnder || teamOdds.superBowlOdds) && (
+                        <div className="subtitle" style={{ fontSize: "0.7rem" }}>
+                          {teamOdds.regSeasonOverUnder ? `O/U ${teamOdds.regSeasonOverUnder}` : ""}
+                          {teamOdds.regSeasonOverUnder && teamOdds.superBowlOdds ? " · " : ""}
+                          {teamOdds.superBowlOdds ? `SB ${teamOdds.superBowlOdds}` : ""}
+                        </div>
+                      )}
+                    </td>
+                    <td className="num">${row.bidAmount.toFixed(2)}</td>
+                    <td className="num">${row.wonBack.toFixed(2)}</td>
+                    <td className={`num ${row.roiPct >= 1 ? "positive" : "negative"}`}>
+                      {(row.roiPct * 100).toFixed(0)}%
+                    </td>
+                    <td>
+                      {row.team && (
+                        <select
+                          defaultValue={row.team.furthest_round}
+                          onChange={(e) => handleRoundChange(row.team, e.target.value)}
+                        >
+                          {ROUND_TIERS.map((tier) => (
+                            <option key={tier} value={tier}>
+                              {ROUND_LABELS[tier]}
+                            </option>
+                          ))}
+                        </select>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+            <tfoot>
+              <tr>
+                <th>Total</th>
+                <th className="num">${totalBid.toFixed(2)}</th>
+                <th className="num">${totalWonBack.toFixed(2)}</th>
+                <th className={`num ${aggregateRoi >= 1 ? "positive" : "negative"}`}>
+                  {(aggregateRoi * 100).toFixed(0)}%
+                </th>
+                <th></th>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      ))}
     </div>
   );
 }

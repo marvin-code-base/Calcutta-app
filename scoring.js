@@ -137,6 +137,34 @@ export function computeEntryPayout(
 }
 
 /**
+ * Distributes each winner's net gain proportionally across losers, weighted
+ * by how much each loser lost. Since payouts are drawn from one shared pot
+ * (not bidder-to-bidder), this is a proportional attribution, not a literal
+ * transfer — but it always balances: what a winner "won" sums exactly to
+ * their net gain, and what a loser "lost" sums exactly to their net loss.
+ * @param {Array<{id: string, net: number}>} entries — net = wonBack - bid
+ * @returns {Record<string, Record<string, number>>} matrix[a][b] = amount a won from b (negative if a lost to b)
+ */
+export function computeHeadToHead(entries) {
+  const matrix = {};
+  for (const e of entries) matrix[e.id] = {};
+
+  const winners = entries.filter((e) => e.net > 0);
+  const losers = entries.filter((e) => e.net < 0);
+  const totalLosses = losers.reduce((sum, l) => sum + Math.abs(l.net), 0);
+  if (totalLosses <= 0) return matrix;
+
+  for (const w of winners) {
+    for (const l of losers) {
+      const amount = w.net * (Math.abs(l.net) / totalLosses);
+      matrix[w.id][l.id] = amount;
+      matrix[l.id][w.id] = -amount;
+    }
+  }
+  return matrix;
+}
+
+/**
  * ROI for a single team relative to what an entry paid for it — "how much
  * of their bid have they won back", per the spec. Requires the per-team
  * bid amount since payout is computed at the entry level above; this
